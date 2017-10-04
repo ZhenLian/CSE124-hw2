@@ -6,7 +6,7 @@
 int main(int argc, char* argv[])
 {
     /* Parse the command line arguments */
-    if (argc != 5) {
+    if (argc != 3) {
         fprintf(stderr,
                 "Usage: %s server-port storage_directory\n",
                 argv[0]);
