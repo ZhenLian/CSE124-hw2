@@ -73,7 +73,7 @@ int invoke_client(char * server_ip_str, char * server_port_str,
         do {
             char buffer[BUFSIZE];
             memset(buffer, '0', sizeof(buffer));
-            numBytes = recv(sockfd, buffer, BUFSIZE - 1, 0);
+            numBytes = recv(sockfd, buffer, BUFSIZE, 0);
             if (numBytes < 0) {
                 printf("recv() failed \n");
                 return 1;
@@ -81,8 +81,7 @@ int invoke_client(char * server_ip_str, char * server_port_str,
             else if (numBytes == 0) {
                 break;
             }
-            buffer[numBytes] = '\0';    // Terminate the string!
-            fputs(buffer, output_stream); 
+            fwrite(buffer, sizeof(char), numBytes, output_stream); 
         } while (numBytes > 0);
     	fclose(output_stream);
     }

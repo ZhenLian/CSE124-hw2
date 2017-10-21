@@ -43,7 +43,7 @@ int invoke_server(char * server_port_str, char * storage_directory)
     printf("listening...\n");
     while(1)
     {
-	    //waiting for connevtions
+	    //waiting for connection
         connfd = accept(listenfd, (struct sockaddr*)NULL, NULL); 
         if(connfd < 0) {
         	printf("Error: accept() failed\n");
@@ -64,7 +64,6 @@ int invoke_server(char * server_port_str, char * storage_directory)
             printf("Error: Could not receive filename\n");
             return 1;
         }
-        buffer[numBytes] = '\0';
         printf("Getting filename...\n");
         char *pch = strstr(buffer, "\r");
         if(!pch) {
@@ -101,9 +100,13 @@ int invoke_server(char * server_port_str, char * storage_directory)
 	        if(!output_stream) {
 	        	printf("Error: Could not receive operation\n");
 	        }
+
+
+
+
 	        do {
 	            memset(buffer, '0', sizeof(buffer));
-		    numBytes = recv(connfd, buffer, BUFSIZE - 1, 0);
+		    numBytes = recv(connfd, buffer, BUFSIZE, 0);
 	            if (numBytes < 0) {
 	                printf("recv() failed \n");
 	                return 1;
@@ -111,8 +114,7 @@ int invoke_server(char * server_port_str, char * storage_directory)
 	            else if (numBytes == 0) {
 	                break;
 	            }
-	            buffer[numBytes] = '\0';    // Terminate the string!
-		    fputs(buffer, output_stream);
+		    fwrite(buffer, sizeof(char), numBytes, output_stream);
 	        } while (numBytes > 0);
 		fclose(output_stream);
         }
