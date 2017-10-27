@@ -9,10 +9,21 @@
 #include <arpa/inet.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <sys/sendfile.h>
 #include <libgen.h>
 
 #include "client.h"
+
+ssize_t sendall(int sockfd, char *buffer, size_t len) {
+    ssize_t ret, sent = 0;
+    while(sent < len) {
+        ret = send(sockfd, buffer + sent, len - sent, 0);
+        if(ret < 0) {
+            return -1;
+        }
+        sent += ret;
+    }
+    return sent;
+}
 
 int invoke_client(char * server_ip_str, char * server_port_str,
 				  enum Operation op, char * filename)
@@ -20,7 +31,7 @@ int invoke_client(char * server_ip_str, char * server_port_str,
 	fprintf(stderr, "Connecting to %s:%s to %d %s\n",
 					server_ip_str, server_port_str,
 					op, filename);
-    int BUFSIZE = 1024;
+    ssize_t BUFSIZE = 1024;
     int sockfd = 0;
     int fd = 0;
     struct sockaddr_in serv_addr;
@@ -94,7 +105,7 @@ int invoke_client(char * server_ip_str, char * server_port_str,
         strcpy(message, tmp1);
         strcat(message, file);
         strcat(message, tmp2);
-        numBytes = send(sockfd, message, strlen(message), 0);
+        numBytes = sendall(sockfd, message, strlen(message));
         if(numBytes < 0) {
             printf("send() failed\n");
             return 1;
@@ -104,12 +115,35 @@ int invoke_client(char * server_ip_str, char * server_port_str,
             printf("Error: Could not receive operation\n");
         }
         printf("client: file opened\n");
-	struct stat stat_buf;
-        fstat(fd, &stat_buf);
-        if(sendfile(sockfd, fd, NULL, stat_buf.st_size) != stat_buf.st_size) {
-            printf("Error: fail to send file: %s\n", filename);
-            return 1;
+	    // struct stat stat_buf;
+     //    fstat(fd, &stat_buf);
+     //    if(sendfile(sockfd, fd, NULL, stat_buf.st_size) != stat_buf.st_size) {
+     //        printf("Error: fail to send file: %s\n", filename);
+     //        return 1;
+     //    }
+        FILE *input_stream = fopen(filename, "r");
+        if (!input_stream) {
+            printf("cannot open file: %s", filename);
         }
+        ssize_t nread = 0;
+        do {
+            char buffer[BUFSIZE];
+            memset(buffer, '0', BUFSIZE);
+            nread = fread(buffer, 1, BUFSIZE, input_stream);
+            if(nread <= 0) {
+                break;
+            }
+            numBytes = sendall(sockfd, buffer, nread);
+            if (numBytes < 0) {
+                printf("recv() failed \n");
+                return 1;
+            }
+            else if (numBytes == 0) {
+                break;
+            }
+        } while(numBytes > 0);
+        fclose(input_stream);
+
     }
     else {
         printf("Invalid operation\n");
@@ -118,3 +152,5 @@ int invoke_client(char * server_ip_str, char * server_port_str,
     close(sockfd);
 	return 0;  // 0 on success, non-zero on error
 }
+
+

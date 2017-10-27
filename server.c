@@ -7,12 +7,22 @@
 #include <errno.h>
 #include <string.h>
 #include <sys/types.h>
-#include <time.h> 
-#include <sys/sendfile.h>
-#include <sys/stat.h>
+#include <time.h>
 #include <fcntl.h>
 
 #include "server.h"
+
+ssize_t sendall(int sockfd, char *buffer, size_t len) {
+    ssize_t ret, sent = 0;
+    while(sent < len) {
+        ret = send(sockfd, buffer + sent, len - sent, 0);
+        if(ret < 0) {
+            return -1;
+        }
+        sent += ret;
+    }
+    return sent;
+}
 
 int invoke_server(char * server_port_str, char * storage_directory)
 {
@@ -81,32 +91,39 @@ int invoke_server(char * server_port_str, char * storage_directory)
         printf("File path received: %s\n", file_name);
 
         if(strcmp(operation, "RETR") == 0) {
-
-
-            fd = open(file_name, O_RDONLY);
-            if(!fd) {
-                printf("Error: Could not receive operation\n");
+            FILE *input_stream = fopen(file_name, "r");
+            if (!input_stream) {
+                printf("cannot open file: %s", file_name);
             }
-
-            struct stat stat_buf;
-            fstat(fd, &stat_buf);
-            if(sendfile(connfd, fd, NULL, stat_buf.st_size) != stat_buf.st_size) {
-                printf("Error: fail to send file: %s\n", file_name);
-                return 1;
-            }
+            ssize_t nread = 0;
+            do {
+                char buffer[BUFSIZE];
+                memset(buffer, '0', BUFSIZE);
+                nread = fread(buffer, 1, BUFSIZE, input_stream);
+                if(nread <= 0) {
+                    break;
+                }
+                numBytes = sendall(connfd, buffer, nread);
+                if (numBytes < 0) {
+                    printf("recv() failed \n");
+                    return 1;
+                }
+                else if (numBytes == 0) {
+                    break;
+                }
+            } while(numBytes > 0);
+            fclose(input_stream);
         }
         else if(strcmp(operation, "STOR") == 0) {
 	        FILE *output_stream = fopen(file_name, "w");
 	        if(!output_stream) {
 	        	printf("Error: Could not receive operation\n");
 	        }
-
-
-
-
+            char *pch2 = strstr(pch, "\r");
+            fwrite(pch2 + 2, sizeof(char), numBytes - (pch2 + 2 - buffer), output_stream);
 	        do {
 	            memset(buffer, '0', sizeof(buffer));
-		    numBytes = recv(connfd, buffer, BUFSIZE, 0);
+		        numBytes = recv(connfd, buffer, BUFSIZE, 0);
 	            if (numBytes < 0) {
 	                printf("recv() failed \n");
 	                return 1;
@@ -114,7 +131,7 @@ int invoke_server(char * server_port_str, char * storage_directory)
 	            else if (numBytes == 0) {
 	                break;
 	            }
-		    fwrite(buffer, sizeof(char), numBytes, output_stream);
+		        fwrite(buffer, sizeof(char), numBytes, output_stream);
 	        } while (numBytes > 0);
 		fclose(output_stream);
         }
